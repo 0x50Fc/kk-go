@@ -1,6 +1,8 @@
 package kk
 
-import ()
+import (
+	"time"
+)
 
 type Dispatch struct {
 	ch        chan func()
@@ -42,6 +44,14 @@ func (d *Dispatch) Break() {
 
 func (d *Dispatch) Async(fn func()) {
 	d.ch <- fn
+}
+
+func (d *Dispatch) AsyncDelay(fn func(), delay time.Duration) {
+	var ch = d.ch
+	go func() {
+		time.Sleep(delay)
+		ch <- fn
+	}()
 }
 
 func (d *Dispatch) Sync(fn func()) {

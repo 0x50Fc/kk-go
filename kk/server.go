@@ -2,6 +2,7 @@ package kk
 
 import (
 	"container/list"
+	"log"
 	"net"
 	"strings"
 )
@@ -33,7 +34,7 @@ func (c *TCPServer) Send(message *Message, from INeuron) {
 	}
 }
 
-func NewTCPServer(name string, address string) *TCPServer {
+func NewTCPServer(name string, address string, maxconnections int) *TCPServer {
 
 	var v = TCPServer{}
 
@@ -66,55 +67,82 @@ func NewTCPServer(name string, address string) *TCPServer {
 		defer close(v.chan_break)
 		defer listen.Close()
 
+		var num_connections = 0
+		var chan_num_connections = make(chan bool)
+
+		defer close(chan_num_connections)
+
 		go func() {
 
-			var conn, err = listen.Accept()
+			for {
 
-			if err != nil {
-				func(err error) {
+				for num_connections >= maxconnections {
+					if !<-chan_num_connections {
+						return
+					}
+				}
+
+				var conn, err = listen.Accept()
+
+				if err != nil {
+					func(err error) {
+						GetDispatchMain().Async(func() {
+							if v.OnFail != nil {
+								v.OnFail(err)
+							}
+						})
+					}(err)
+					return
+				}
+
+				if conn == nil {
+					return
+				}
+
+				func(conn net.Conn) {
+
 					GetDispatchMain().Async(func() {
-						if v.OnFail != nil {
-							v.OnFail(err)
+
+						num_connections += 1
+
+						log.Printf("connections: %d\n", num_connections)
+
+						var client = NewTCPClientConnection(conn)
+						v.clients.PushBack(client)
+						client.OnDisconnected = func(err error) {
+							if v.OnDisconnected != nil {
+								v.OnDisconnected(client)
+							}
+							var e = v.clients.Front()
+							for e != nil {
+								var f = e.Value.(*TCPClient)
+								if f == client {
+									var n = e.Next()
+									v.clients.Remove(e)
+									e = n
+									break
+								}
+								e = e.Next()
+							}
+							if num_connections >= maxconnections {
+								num_connections -= 1
+								chan_num_connections <- true
+							} else {
+								num_connections -= 1
+							}
+							log.Printf("connections: %d\n", num_connections)
+						}
+						client.OnMessage = func(message *Message) {
+							if v.OnMessage != nil {
+								v.OnMessage(message, client)
+							}
+						}
+						if v.OnAccept != nil {
+							v.OnAccept(client)
 						}
 					})
-				}(err)
-				return
+				}(conn)
 			}
-
-			if conn == nil {
-				return
-			}
-
-			func(conn net.Conn) {
-				GetDispatchMain().Async(func() {
-					var client = NewTCPClientConnection(conn)
-					v.clients.PushBack(client)
-					client.OnDisconnected = func(err error) {
-						if v.OnDisconnected != nil {
-							v.OnDisconnected(client)
-						}
-						var e = v.clients.Front()
-						for e != nil {
-							var f = e.Value.(*TCPClient)
-							if f == client {
-								var n = e.Next()
-								v.clients.Remove(e)
-								e = n
-								continue
-							}
-							e = e.Next()
-						}
-					}
-					client.OnMessage = func(message *Message) {
-						if v.OnMessage != nil {
-							v.OnMessage(message, client)
-						}
-					}
-					if v.OnAccept != nil {
-						v.OnAccept(client)
-					}
-				})
-			}(conn)
 		}()
 
 		<-v.chan_break

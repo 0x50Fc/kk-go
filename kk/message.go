@@ -92,6 +92,7 @@ func (rd *MessageReader) readBytes(data []byte, n int) (*Message, int) {
 					}
 					rd._key.Reset()
 					rd._value.Reset()
+					rd._state = MessageReaderStateKey
 				} else {
 					rd._value.WriteByte(c)
 				}
@@ -165,7 +166,7 @@ func (wd *MessageWriter) Done(writer IWriter) (bool, error) {
 	return true, nil
 }
 
-func (wd *MessageWriter) Write(writer IWriter, message *Message) (bool, error) {
+func (wd *MessageWriter) Write(message *Message) {
 
 	wd._data.WriteString("METHOD:")
 	wd._data.WriteString(message.Method)
@@ -192,6 +193,4 @@ func (wd *MessageWriter) Write(writer IWriter, message *Message) (bool, error) {
 		wd._data.WriteString("\n\n")
 		wd._data.Write(message.Content)
 	}
-
-	return wd.Done(writer)
 }

@@ -1,7 +1,7 @@
 package kk
 
 import (
-	"errors"
+	"log"
 	"net"
 )
 
@@ -26,6 +26,24 @@ func (c *TCPClient) Send(message *Message, from INeuron) {
 	c.chan_message <- &m
 }
 
+func (c *TCPClient) onDisconnected(err error) {
+	if c.isconnected {
+		c.isconnected = false
+		if c.OnDisconnected != nil {
+			c.OnDisconnected(err)
+		}
+	}
+}
+
+func (c *TCPClient) onConnected() {
+	if !c.isconnected {
+		c.isconnected = true
+		if c.OnConnected != nil {
+			c.OnConnected()
+		}
+	}
+}
+
 func NewTCPClient(name string, address string) *TCPClient {
 
 	var v = TCPClient{}
@@ -35,24 +53,6 @@ func NewTCPClient(name string, address string) *TCPClient {
 	v.chan_message = make(chan *Message)
 	v.chan_break = make(chan bool)
 
-	var onconnect = func() {
-		if !v.isconnected {
-			v.isconnected = true
-			if v.OnConnected != nil {
-				v.OnConnected()
-			}
-		}
-	}
-
-	var ondisconnect = func(err error) {
-		if v.isconnected {
-			v.isconnected = false
-			if v.OnDisconnected != nil {
-				v.OnDisconnected(err)
-			}
-		}
-	}
-
 	go func() {
 
 		var conn, err = net.Dial("tcp", address)
@@ -60,13 +60,15 @@ func NewTCPClient(name string, address string) *TCPClient {
 		if err != nil {
 			func(err error) {
 				GetDispatchMain().Async(func() {
-					ondisconnect(err)
+					if v.OnDisconnected != nil {
+						v.OnDisconnected(err)
+					}
 				})
 			}(err)
 			return
 		} else {
 			GetDispatchMain().Async(func() {
-				onconnect()
+				v.onConnected()
 			})
 		}
 
@@ -86,7 +88,7 @@ func NewTCPClient(name string, address string) *TCPClient {
 					func(err error) {
 						v.chan_break <- true
 						GetDispatchMain().Async(func() {
-							ondisconnect(err)
+							v.onDisconnected(err)
 						})
 					}(err)
 					break
@@ -109,6 +111,11 @@ func NewTCPClient(name string, address string) *TCPClient {
 
 			var wd = NewMessageWriter()
 
+			{
+				var m = Message{"CONNECT", name, "", "", []byte("")}
+				wd.Write(&m)
+			}
+
 			for {
 
 				var r, err = wd.Done(conn)
@@ -117,7 +124,7 @@ func NewTCPClient(name string, address string) *TCPClient {
 					func(err error) {
 						v.chan_break <- true
 						GetDispatchMain().Async(func() {
-							ondisconnect(err)
+							v.onDisconnected(err)
 						})
 					}(err)
 					break
@@ -130,16 +137,17 @@ func NewTCPClient(name string, address string) *TCPClient {
 					if m == nil {
 
 						GetDispatchMain().Async(func() {
-							ondisconnect(errors.New("break"))
+							v.onDisconnected(err)
 						})
 
 						break
 					} else {
-						r, err = wd.Write(conn, m)
+						wd.Write(m)
+						r, err = wd.Done(conn)
 						if err != nil {
 							func(err error) {
 								GetDispatchMain().Async(func() {
-									ondisconnect(err)
+									v.onDisconnected(err)
 								})
 							}(err)
 							break
@@ -168,15 +176,6 @@ func NewTCPClientConnection(conn net.Conn) *TCPClient {
 	v.chan_break = make(chan bool)
 	v.isconnected = true
 
-	var ondisconnect = func(err error) {
-		if v.isconnected {
-			v.isconnected = false
-			if v.OnDisconnected != nil {
-				v.OnDisconnected(err)
-			}
-		}
-	}
-
 	go func() {
 
 		defer close(v.chan_message)
@@ -194,7 +193,7 @@ func NewTCPClientConnection(conn net.Conn) *TCPClient {
 				if err != nil {
 					func(err error) {
 						GetDispatchMain().Async(func() {
-							ondisconnect(err)
+							v.onDisconnected(err)
 						})
 					}(err)
 					break
@@ -205,6 +204,7 @@ func NewTCPClientConnection(conn net.Conn) *TCPClient {
 						GetDispatchMain().Async(func() {
 							if message.Method == "CONNECT" {
 								v.name = message.From
+								log.Println("CONNECT " + v.name + " address: " + v.Address())
 							}
 							if v.OnMessage != nil {
 								v.OnMessage(&message)
@@ -227,7 +227,7 @@ func NewTCPClientConnection(conn net.Conn) *TCPClient {
 				if err != nil {
 					func(err error) {
 						GetDispatchMain().Async(func() {
-							ondisconnect(err)
+							v.onDisconnected(err)
 						})
 					}(err)
 					break
@@ -238,18 +238,14 @@ func NewTCPClientConnection(conn net.Conn) *TCPClient {
 					var m = <-v.chan_message
 
 					if m == nil {
-
-						GetDispatchMain().Async(func() {
-							ondisconnect(errors.New("break"))
-						})
-
 						break
 					} else {
-						r, err = wd.Write(conn, m)
+						wd.Write(m)
+						r, err = wd.Done(conn)
 						if err != nil {
 							func(err error) {
 								GetDispatchMain().Async(func() {
-									ondisconnect(err)
+									v.onDisconnected(err)
 								})
 							}(err)
 							break
