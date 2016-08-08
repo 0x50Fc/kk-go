@@ -108,10 +108,12 @@ func main() {
 		}
 
 		server.OnMessage = func(message *kk.Message, from kk.INeuron) {
-			if strings.HasPrefix(message.To, name) {
-				server.Send(message, from)
-			} else if remote != nil {
-				remote.Send(message, nil)
+			if message.Method == "MESSAGE" {
+				if strings.HasPrefix(message.To, name) {
+					server.Send(message, from)
+				} else if remote != nil {
+					remote.Send(message, nil)
+				}
 			}
 		}
 	}
