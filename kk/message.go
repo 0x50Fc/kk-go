@@ -160,7 +160,7 @@ func (wd *MessageWriter) Done(writer IWriter) (bool, error) {
 	if wd._data.Len() != 0 {
 		var n, err = writer.Write(wd._data.Bytes())
 		wd._data.Truncate(wd._data.Len() - n)
-		return wd._data.Len() == 0, err
+		return false, err
 	}
 
 	return true, nil

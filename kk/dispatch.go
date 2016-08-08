@@ -21,7 +21,10 @@ func NewDispatch() *Dispatch {
 		defer close(ch)
 
 		for !v.loopbreak {
-			var fn = <-ch
+			var fn, ok = <-ch
+			if !ok {
+				break
+			}
 			if fn != nil {
 				fn()
 			}

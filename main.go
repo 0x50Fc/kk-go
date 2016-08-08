@@ -103,8 +103,8 @@ func main() {
 			log.Println("accept: " + client.Address())
 		}
 
-		server.OnDisconnected = func(client *kk.TCPClient) {
-			log.Println("disconnected: " + client.Address())
+		server.OnDisconnected = func(client *kk.TCPClient, err error) {
+			log.Println("disconnected: " + client.Address() + " error: " + err.Error())
 		}
 
 		server.OnMessage = func(message *kk.Message, from kk.INeuron) {

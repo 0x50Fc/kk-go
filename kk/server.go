@@ -16,7 +16,7 @@ type TCPServer struct {
 	OnStart        func()
 	OnFail         func(err error)
 	OnAccept       func(client *TCPClient)
-	OnDisconnected func(client *TCPClient)
+	OnDisconnected func(client *TCPClient, err error)
 }
 
 func (c *TCPServer) Break() {
@@ -64,20 +64,18 @@ func NewTCPServer(name string, address string, maxconnections int) *TCPServer {
 			})
 		}
 
-		defer close(v.chan_break)
-		defer listen.Close()
-
 		var num_connections = 0
 		var chan_num_connections = make(chan bool)
 
-		defer close(chan_num_connections)
+		var chan_accept = make(chan bool)
 
 		go func() {
 
 			for {
 
 				for num_connections >= maxconnections {
-					if !<-chan_num_connections {
+					var v, ok = <-chan_num_connections
+					if !v || !ok {
 						return
 					}
 				}
@@ -111,7 +109,7 @@ func NewTCPServer(name string, address string, maxconnections int) *TCPServer {
 						v.clients.PushBack(client)
 						client.OnDisconnected = func(err error) {
 							if v.OnDisconnected != nil {
-								v.OnDisconnected(client)
+								v.OnDisconnected(client, err)
 							}
 							var e = v.clients.Front()
 							for e != nil {
@@ -143,9 +141,21 @@ func NewTCPServer(name string, address string, maxconnections int) *TCPServer {
 					})
 				}(conn)
 			}
+
+			select {
+			case v.chan_break <- true:
+			default:
+			}
 		}()
 
 		<-v.chan_break
+
+		listen.Close()
+		close(chan_num_connections)
+
+		<-chan_accept
+
+		close(v.chan_break)
 
 		GetDispatchMain().Async(func() {
 			var e = v.clients.Front()

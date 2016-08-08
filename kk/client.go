@@ -8,7 +8,7 @@ import (
 type TCPClient struct {
 	Neuron
 	chan_break   chan bool
-	chan_message chan *Message
+	chan_message chan Message
 	isconnected  bool
 
 	OnMessage func(message *Message)
@@ -22,8 +22,7 @@ func (c *TCPClient) Break() {
 }
 
 func (c *TCPClient) Send(message *Message, from INeuron) {
-	var m = *message
-	c.chan_message <- &m
+	c.chan_message <- *message
 }
 
 func (c *TCPClient) onDisconnected(err error) {
@@ -50,7 +49,7 @@ func NewTCPClient(name string, address string) *TCPClient {
 
 	v.name = name
 	v.address = address
-	v.chan_message = make(chan *Message)
+	v.chan_message = make(chan Message)
 	v.chan_break = make(chan bool)
 
 	go func() {
@@ -65,6 +64,8 @@ func NewTCPClient(name string, address string) *TCPClient {
 					}
 				})
 			}(err)
+			close(v.chan_break)
+			close(v.chan_message)
 			return
 		} else {
 			GetDispatchMain().Async(func() {
@@ -72,9 +73,8 @@ func NewTCPClient(name string, address string) *TCPClient {
 			})
 		}
 
-		defer close(v.chan_message)
-		defer close(v.chan_break)
-		defer conn.Close()
+		var chan_rd = make(chan bool)
+		var chan_wd = make(chan bool)
 
 		go func() {
 
@@ -84,16 +84,6 @@ func NewTCPClient(name string, address string) *TCPClient {
 
 				var m, err = rd.Read(conn)
 
-				if err != nil {
-					func(err error) {
-						v.chan_break <- true
-						GetDispatchMain().Async(func() {
-							v.onDisconnected(err)
-						})
-					}(err)
-					break
-				}
-
 				if m != nil {
 					func(message Message) {
 						GetDispatchMain().Async(func() {
@@ -102,8 +92,22 @@ func NewTCPClient(name string, address string) *TCPClient {
 							}
 						})
 					}(*m)
+				} else if err != nil {
+					func(err error) {
+						GetDispatchMain().Async(func() {
+							v.onDisconnected(err)
+						})
+					}(err)
+					break
 				}
 			}
+
+			select {
+			case v.chan_break <- true:
+			default:
+			}
+
+			chan_rd <- true
 
 		}()
 
@@ -122,7 +126,6 @@ func NewTCPClient(name string, address string) *TCPClient {
 
 				if err != nil {
 					func(err error) {
-						v.chan_break <- true
 						GetDispatchMain().Async(func() {
 							v.onDisconnected(err)
 						})
@@ -132,34 +135,37 @@ func NewTCPClient(name string, address string) *TCPClient {
 
 				if r {
 
-					var m = <-v.chan_message
+					var m, ok = <-v.chan_message
 
-					if m == nil {
-
-						GetDispatchMain().Async(func() {
-							v.onDisconnected(err)
-						})
-
+					if !ok {
 						break
 					} else {
-						wd.Write(m)
-						r, err = wd.Done(conn)
-						if err != nil {
-							func(err error) {
-								GetDispatchMain().Async(func() {
-									v.onDisconnected(err)
-								})
-							}(err)
-							break
-						}
+						wd.Write(&m)
 					}
 
 				}
 
 			}
+
+			select {
+			case v.chan_break <- true:
+			default:
+			}
+
+			chan_wd <- true
 		}()
 
 		<-v.chan_break
+
+		close(v.chan_message)
+		conn.Close()
+
+		<-chan_rd
+		<-chan_wd
+
+		close(v.chan_break)
+		close(chan_rd)
+		close(chan_wd)
 
 	}()
 
@@ -172,15 +178,14 @@ func NewTCPClientConnection(conn net.Conn) *TCPClient {
 
 	v.name = ""
 	v.address = conn.RemoteAddr().String()
-	v.chan_message = make(chan *Message)
+	v.chan_message = make(chan Message)
 	v.chan_break = make(chan bool)
 	v.isconnected = true
 
 	go func() {
 
-		defer close(v.chan_message)
-		defer close(v.chan_break)
-		defer conn.Close()
+		var chan_rd = make(chan bool)
+		var chan_wd = make(chan bool)
 
 		go func() {
 
@@ -190,7 +195,18 @@ func NewTCPClientConnection(conn net.Conn) *TCPClient {
 
 				var m, err = rd.Read(conn)
 
-				if err != nil {
+				if m != nil {
+					func(message Message) {
+						GetDispatchMain().Async(func() {
+							if message.Method == "CONNECT" {
+								v.name = message.From
+								log.Println("CONNECT " + v.name + " address: " + v.Address())
+							} else if v.OnMessage != nil {
+								v.OnMessage(&message)
+							}
+						})
+					}(*m)
+				} else if err != nil {
 					func(err error) {
 						GetDispatchMain().Async(func() {
 							v.onDisconnected(err)
@@ -199,20 +215,14 @@ func NewTCPClientConnection(conn net.Conn) *TCPClient {
 					break
 				}
 
-				if m != nil {
-					func(message Message) {
-						GetDispatchMain().Async(func() {
-							if message.Method == "CONNECT" {
-								v.name = message.From
-								log.Println("CONNECT " + v.name + " address: " + v.Address())
-							}
-							if v.OnMessage != nil {
-								v.OnMessage(&message)
-							}
-						})
-					}(*m)
-				}
 			}
+
+			select {
+			case v.chan_break <- true:
+			default:
+			}
+
+			chan_rd <- true
 
 		}()
 
@@ -235,29 +245,37 @@ func NewTCPClientConnection(conn net.Conn) *TCPClient {
 
 				if r {
 
-					var m = <-v.chan_message
+					var m, ok = <-v.chan_message
 
-					if m == nil {
+					if !ok {
 						break
 					} else {
-						wd.Write(m)
-						r, err = wd.Done(conn)
-						if err != nil {
-							func(err error) {
-								GetDispatchMain().Async(func() {
-									v.onDisconnected(err)
-								})
-							}(err)
-							break
-						}
+						wd.Write(&m)
 					}
 
 				}
 
 			}
+
+			select {
+			case v.chan_break <- true:
+			default:
+			}
+
+			chan_wd <- true
 		}()
 
 		<-v.chan_break
+
+		close(v.chan_message)
+		conn.Close()
+
+		<-chan_rd
+		<-chan_wd
+
+		close(v.chan_break)
+		close(chan_rd)
+		close(chan_wd)
 
 	}()
 
