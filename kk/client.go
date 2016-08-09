@@ -3,6 +3,7 @@ package kk
 import (
 	"log"
 	"net"
+	"strings"
 )
 
 type TCPClient struct {
@@ -18,11 +19,15 @@ type TCPClient struct {
 }
 
 func (c *TCPClient) Break() {
-	c.chan_break <- true
+	if c.chan_break != nil {
+		c.chan_break <- true
+	}
 }
 
 func (c *TCPClient) Send(message *Message, from INeuron) {
-	c.chan_message <- *message
+	if c.chan_message != nil {
+		c.chan_message <- *message
+	}
 }
 
 func (c *TCPClient) onDisconnected(err error) {
@@ -87,6 +92,12 @@ func NewTCPClient(name string, address string) *TCPClient {
 				if m != nil {
 					func(message Message) {
 						GetDispatchMain().Async(func() {
+
+							if message.Method == "CONNECTED" {
+								v.name = message.To
+								log.Println("CONNECTED " + v.name)
+							}
+
 							if v.OnMessage != nil {
 								v.OnMessage(&message)
 							}
@@ -167,12 +178,14 @@ func NewTCPClient(name string, address string) *TCPClient {
 		close(chan_rd)
 		close(chan_wd)
 
+		v.chan_break = nil
+		v.chan_message = nil
 	}()
 
 	return &v
 }
 
-func NewTCPClientConnection(conn net.Conn) *TCPClient {
+func NewTCPClientConnection(conn net.Conn, id string) *TCPClient {
 
 	var v = TCPClient{}
 
@@ -199,7 +212,12 @@ func NewTCPClientConnection(conn net.Conn) *TCPClient {
 					func(message Message) {
 						GetDispatchMain().Async(func() {
 							if message.Method == "CONNECT" {
-								v.name = message.From
+								if strings.HasSuffix(message.From, ".*") {
+									v.name = message.From[0:len(message.From)-1] + id
+								} else {
+									v.name = message.From
+								}
+								v.Send(&Message{"CONNECTED", v.name, v.name, "", []byte("")}, nil)
 								log.Println("CONNECT " + v.name + " address: " + v.Address())
 							} else if v.OnMessage != nil {
 								v.OnMessage(&message)

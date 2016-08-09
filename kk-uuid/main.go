@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/hailongz/kk-go/kk"
 	"log"
@@ -11,23 +12,6 @@ import (
 
 func help() {
 	fmt.Println("kk-uuid <name> <0.0.0.0:8080>")
-}
-
-const twepoch = int64(1424016000000)
-
-var _id = twepoch
-
-func milliseconds() int64 {
-	return time.Now().UnixNano() / 1e6
-}
-
-func nextId() int64 {
-	var id = milliseconds()
-	for _id == id {
-		id = milliseconds()
-	}
-	_id = id
-	return _id - twepoch
 }
 
 func main() {
@@ -58,8 +42,10 @@ func main() {
 			kk.GetDispatchMain().AsyncDelay(cli_connect, time.Second)
 		}
 		cli.OnMessage = func(message *kk.Message) {
-			var r = kk.Message{message.Method, name, message.From, "text", []byte(strconv.FormatInt(nextId(), 10))}
-			cli.Send(&r, nil)
+			if message.Method == "MESSAGE" {
+				var v = kk.Message{message.Method, name, message.From, "text", []byte(strconv.FormatInt(kk.UUID(), 10))}
+				cli.Send(&v, nil)
+			}
 		}
 	}
 

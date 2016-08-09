@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"log"
 	"net"
+	"strconv"
 	"strings"
 )
 
@@ -108,7 +109,8 @@ func NewTCPServer(name string, address string, maxconnections int) *TCPServer {
 
 						log.Printf("connections: %d\n", num_connections)
 
-						var client = NewTCPClientConnection(conn)
+						var client = NewTCPClientConnection(conn, strconv.FormatInt(UUID(), 10))
+
 						v.clients.PushBack(client)
 						client.OnDisconnected = func(err error) {
 							if v.OnDisconnected != nil {
