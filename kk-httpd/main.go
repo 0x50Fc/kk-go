@@ -73,7 +73,7 @@ func main() {
 
 		var body = make([]byte, r.ContentLength)
 		var contentType = r.Header.Get("Content-Type")
-		var to = r.RequestURI[1:]
+		var to = r.RequestURI[len(alias):]
 		var n, err = r.Body.Read(body)
 		defer r.Body.Close()
 
