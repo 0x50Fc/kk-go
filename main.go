@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+const VERSION = "1.0.0"
+
 func help() {
 	log.Println("kk-go <name> [--local 0.0.0.0:8080] [--remote 127.0.0.1:8090] [--maxconnections 204800]")
 }

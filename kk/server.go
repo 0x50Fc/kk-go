@@ -74,11 +74,14 @@ func NewTCPServer(name string, address string, maxconnections int) *TCPServer {
 			for {
 
 				for num_connections >= maxconnections {
+					log.Printf("wait %d:%d ...\n", num_connections, maxconnections)
 					var v, ok = <-chan_num_connections
 					if !v || !ok {
 						return
 					}
 				}
+
+				log.Println("accept ...")
 
 				var conn, err = listen.Accept()
 
@@ -122,11 +125,10 @@ func NewTCPServer(name string, address string, maxconnections int) *TCPServer {
 								}
 								e = e.Next()
 							}
-							if num_connections >= maxconnections {
-								num_connections -= 1
-								chan_num_connections <- true
-							} else {
-								num_connections -= 1
+							num_connections -= 1
+							select {
+							case chan_num_connections <- true:
+							default:
 							}
 							log.Printf("connections: %d\n", num_connections)
 						}

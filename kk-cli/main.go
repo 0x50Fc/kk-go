@@ -3,23 +3,24 @@ package main
 import (
 	"fmt"
 	"github.com/hailongz/kk-go/kk"
+	"log"
 	"os"
 	"time"
 )
 
 func help() {
-	fmt.Println("kk-go-cli <name> <0.0.0.0:8080>")
+	fmt.Println("kk-cli <name> <0.0.0.0:8080>")
 }
 
 func main() {
 
 	var args = os.Args
 	var name string = ""
-	var localAddr string = ""
+	var address string = ""
 
 	if len(args) > 2 {
 		name = args[1]
-		localAddr = args[2]
+		address = args[2]
 	} else {
 		help()
 		return
@@ -29,17 +30,20 @@ func main() {
 	var cli_connect func() = nil
 
 	cli_connect = func() {
-		fmt.Println("connect " + localAddr + " ...")
-		cli = kk.NewTCPClient(name, localAddr)
+		log.Println("connect " + address + " ...")
+		cli = kk.NewTCPClient(name, address)
 		cli.OnConnected = func() {
-			fmt.Println(cli.Address())
+			log.Println(cli.Address())
 		}
 		cli.OnDisconnected = func(err error) {
-			fmt.Println("disconnected: " + cli.Address() + " error:" + err.Error())
+			log.Println("disconnected: " + cli.Address() + " error:" + err.Error())
 			kk.GetDispatchMain().AsyncDelay(cli_connect, time.Second)
 		}
 		cli.OnMessage = func(message *kk.Message) {
 			fmt.Println(message)
+			if message.Type == "text" {
+				fmt.Println(string(message.Content))
+			}
 		}
 	}
 
@@ -54,9 +58,8 @@ func main() {
 
 			fmt.Scanf("%s %s", &to, &content)
 
-			fmt.Printf("%s %s\n", to, content)
-
 			func(to string, content string) {
+
 				kk.GetDispatchMain().Async(func() {
 					var m = kk.Message{"MESSAGE", cli.Name(), to, "text", []byte(content)}
 					cli.Send(&m, nil)
