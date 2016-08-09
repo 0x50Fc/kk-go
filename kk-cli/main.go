@@ -53,15 +53,16 @@ func main() {
 
 		for {
 
+			var method string
 			var to string
 			var content string
 
-			fmt.Scanf("%s %s", &to, &content)
+			fmt.Scanf("%s %s %s", &method, &to, &content)
 
 			func(to string, content string) {
 
 				kk.GetDispatchMain().Async(func() {
-					var m = kk.Message{"MESSAGE", cli.Name(), to, "text", []byte(content)}
+					var m = kk.Message{method, cli.Name(), to, "text", []byte(content)}
 					cli.Send(&m, nil)
 				})
 

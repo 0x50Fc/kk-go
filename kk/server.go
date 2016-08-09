@@ -25,6 +25,24 @@ func (c *TCPServer) Break() {
 }
 
 func (c *TCPServer) Send(message *Message, from INeuron) {
+
+	if message.Method == "SERVER" && message.To == c.name {
+		if from != nil {
+			var m = Message{"CLIENT", "", message.From, "text", []byte("")}
+			var e = c.clients.Front()
+			for e != nil {
+				var f = e.Value.(*TCPClient)
+				m.From = f.name
+				m.Content = []byte(f.address)
+				if m.From != "" {
+					from.Send(&m, nil)
+				}
+				e = e.Next()
+			}
+		}
+		return
+	}
+
 	var e = c.clients.Front()
 	for e != nil {
 		var f = e.Value.(*TCPClient)
@@ -112,6 +130,7 @@ func NewTCPServer(name string, address string, maxconnections int) *TCPServer {
 						var client = NewTCPClientConnection(conn, strconv.FormatInt(UUID(), 10))
 
 						v.clients.PushBack(client)
+
 						client.OnDisconnected = func(err error) {
 							if v.OnDisconnected != nil {
 								v.OnDisconnected(client, err)
