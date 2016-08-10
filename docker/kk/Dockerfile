@@ -1,4 +1,4 @@
-FROM kk/golang
+FROM registry-internal.cn-hangzhou.aliyuncs.com/kk/golang
 
 RUN go get -u github.com/hailongz/kk-go
 
