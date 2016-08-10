@@ -12,4 +12,4 @@ ENV KK_ADDR 127.0.0.1:87
 
 EXPOSE 88
 
-CMD kk-httpd kk.httpd. $KK_ADDR :88
+CMD kk-httpd kk.httpd. $KK_ADDR :88 /kk/
