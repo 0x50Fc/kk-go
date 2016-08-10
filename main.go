@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/hailongz/kk-go/kk"
+	"./kk"
 	"log"
 	"os"
 	"strconv"
