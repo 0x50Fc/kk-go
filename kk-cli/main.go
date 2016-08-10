@@ -31,7 +31,7 @@ func main() {
 
 	cli_connect = func() {
 		log.Println("connect " + address + " ...")
-		cli = kk.NewTCPClient(name, address)
+		cli = kk.NewTCPClient(name, address, nil)
 		cli.OnConnected = func() {
 			log.Println(cli.Address())
 		}

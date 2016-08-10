@@ -1,6 +1,7 @@
 package kk
 
 import (
+	"encoding/json"
 	"log"
 	"net"
 	"strings"
@@ -48,7 +49,7 @@ func (c *TCPClient) onConnected() {
 	}
 }
 
-func NewTCPClient(name string, address string) *TCPClient {
+func NewTCPClient(name string, address string, options map[string]interface{}) *TCPClient {
 
 	var v = TCPClient{}
 
@@ -127,7 +128,11 @@ func NewTCPClient(name string, address string) *TCPClient {
 			var wd = NewMessageWriter()
 
 			{
-				var m = Message{"CONNECT", name, "", "", []byte("")}
+				var b []byte = nil
+				if options != nil {
+					b, _ = json.Marshal(options)
+				}
+				var m = Message{"CONNECT", name, "", "text/json", b}
 				wd.Write(&m)
 			}
 
@@ -216,6 +221,9 @@ func NewTCPClientConnection(conn net.Conn, id string) *TCPClient {
 									v.name = message.From[0:len(message.From)-1] + id
 								} else {
 									v.name = message.From
+								}
+								if message.Type == "text/json" && message.Content != nil {
+									json.Unmarshal(message.Content, &v.options)
 								}
 								v.Send(&Message{"CONNECTED", v.name, v.name, "", []byte("")}, nil)
 								log.Println("CONNECT " + v.name + " address: " + v.Address())

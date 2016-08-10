@@ -43,14 +43,25 @@ func (c *TCPServer) Send(message *Message, from INeuron) {
 		return
 	}
 
-	var e = c.clients.Front()
+	var e = c.clients.Back()
+	var count = 0
 	for e != nil {
 		var f = e.Value.(*TCPClient)
 		if (from == nil || (from != f)) && f.name != "" && strings.HasPrefix(message.To, f.name) {
 			f.Send(message, from)
+			count += 1
+			if f.Get("exclusive").(bool) {
+				break
+			}
 		}
-		e = e.Next()
+		e = e.Prev()
 	}
+
+	if count == 0 && from != nil {
+		var m = Message{"DONE", c.name, from.Name(), "", []byte("")}
+		from.Send(&m, nil)
+	}
+
 }
 
 func NewTCPServer(name string, address string, maxconnections int) *TCPServer {

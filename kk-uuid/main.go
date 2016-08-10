@@ -32,7 +32,7 @@ func main() {
 
 	cli_connect = func() {
 		log.Println("connect " + address + " ...")
-		cli = kk.NewTCPClient(name, address)
+		cli = kk.NewTCPClient(name, address, map[string]interface{}{"exclusive": true})
 		cli.OnConnected = func() {
 			log.Println(cli.Address())
 		}

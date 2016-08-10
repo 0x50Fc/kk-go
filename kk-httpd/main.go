@@ -40,7 +40,7 @@ func main() {
 
 	cli_connect = func() {
 		log.Println("connect " + address + " ...")
-		cli = kk.NewTCPClient(name, address)
+		cli = kk.NewTCPClient(name, address, map[string]interface{}{"exclusive": true})
 		cli.OnConnected = func() {
 			log.Println(cli.Address())
 		}
@@ -49,17 +49,22 @@ func main() {
 			kk.GetDispatchMain().AsyncDelay(cli_connect, time.Second)
 		}
 		cli.OnMessage = func(message *kk.Message) {
-			if message.Method == "MESSAGE" {
 
-				var i = strings.LastIndex(message.To, ".")
-				var id, _ = strconv.ParseInt(message.To[i+1:], 10, 64)
-				var ch = https[id]
+			var i = strings.LastIndex(message.To, ".")
+			var id, _ = strconv.ParseInt(message.To[i+1:], 10, 64)
+			var ch = https[id]
 
-				if ch != nil {
+			if ch != nil {
+				if message.Method == "MESSAGE" {
 					ch <- *message
+					delete(https, id)
+				} else {
+					var m = kk.Message{"UNAVAILABLE", "", "", "", []byte("")}
+					ch <- m
 					delete(https, id)
 				}
 			}
+
 		}
 	}
 
@@ -119,6 +124,8 @@ func main() {
 		} else {
 			if m.Method == "TIMEOUT" {
 				w.WriteHeader(http.StatusGatewayTimeout)
+			} else if m.Method == "UNAVAILABLE" {
+				w.WriteHeader(http.StatusServiceUnavailable)
 			} else {
 				w.Header().Add("From", m.From)
 				w.Header().Add("Content-Type", m.Type)

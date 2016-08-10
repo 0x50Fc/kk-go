@@ -67,7 +67,7 @@ func main() {
 
 	remote_connect = func() {
 		log.Println("remote connect ...")
-		remote = kk.NewTCPClient(name, remoteAddr)
+		remote = kk.NewTCPClient(name, remoteAddr, nil)
 		remote.OnConnected = func() {
 			log.Println("remote: " + remote.Address())
 		}

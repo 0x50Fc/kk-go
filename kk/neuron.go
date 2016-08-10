@@ -13,7 +13,7 @@ type INeuron interface {
 type Neuron struct {
 	name    string
 	address string
-	values  map[string]interface{}
+	options map[string]interface{}
 }
 
 func (n *Neuron) Name() string {
@@ -25,21 +25,21 @@ func (n *Neuron) Address() string {
 }
 
 func (n *Neuron) Get(key string) interface{} {
-	if n.values != nil {
-		return n.values[key]
+	if n.options != nil {
+		return n.options[key]
 	}
 	return nil
 }
 
 func (n *Neuron) Set(key string, value interface{}) {
-	if n.values != nil {
-		n.values = make(map[string]interface{})
+	if n.options != nil {
+		n.options = make(map[string]interface{})
 	}
-	n.values[key] = value
+	n.options[key] = value
 }
 
 func (n *Neuron) Remove(key string) {
-	if n.values != nil {
-		delete(n.values, key)
+	if n.options != nil {
+		delete(n.options, key)
 	}
 }
