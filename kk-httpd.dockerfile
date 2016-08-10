@@ -4,7 +4,7 @@ RUN mkdir github.com
 
 RUN mkdir github.com/hailongz
 
-COPY ../../ github.com/hailongz/kk-go
+COPY . github.com/hailongz/kk-go
 
 RUN go install github.com/hailongz/kk-go/kk-httpd
 
