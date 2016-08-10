@@ -10,4 +10,4 @@ RUN go install github.com/hailongz/kk-go/kk-uuid
 
 ENV KK_ADDR 127.0.0.1:87
 
-CMD kk-uuid kk.uuid. KK_ADDR
+CMD kk-uuid kk.uuid. $KK_ADDR
