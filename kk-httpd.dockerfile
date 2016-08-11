@@ -1,4 +1,4 @@
-FROM registry-internal.cn-hangzhou.aliyuncs.com/kk/golang
+FROM registry-internal.cn-hangzhou.aliyuncs.com/kk/kk-golang
 
 RUN mkdir github.com
 
