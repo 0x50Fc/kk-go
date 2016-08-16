@@ -41,8 +41,12 @@ func main() {
 			kk.GetDispatchMain().AsyncDelay(cli_connect, time.Second)
 		}
 		cli.OnMessage = func(message *kk.Message) {
-			if message.Method == "MESSAGE" {
+			if message.Method == "REQUEST" {
 				var v = kk.Message{message.Method, name, message.From, "text", []byte(strconv.FormatInt(kk.UUID(), 10))}
+				cli.Send(&v, nil)
+			} else {
+				var v = kk.Message{"NOIMPLEMENT", message.To, message.From, "", []byte("")}
+				log.Println(v)
 				cli.Send(&v, nil)
 			}
 		}
