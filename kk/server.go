@@ -57,8 +57,8 @@ func (c *TCPServer) Send(message *Message, from INeuron) {
 		e = e.Prev()
 	}
 
-	if count == 0 && from != nil {
-		var m = Message{"DONE", c.name, from.Name(), "", []byte("")}
+	if count == 0 && from != nil && c.name != message.To {
+		var m = Message{"DONE", c.name, from.Name(), message.Method, []byte("")}
 		from.Send(&m, nil)
 	}
 

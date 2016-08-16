@@ -50,6 +50,12 @@ func main() {
 		}
 		cli.OnMessage = func(message *kk.Message) {
 
+			log.Println(message)
+
+			if strings.HasPrefix(message.Type, "text") {
+				log.Println(string(message.Content))
+			}
+
 			var i = strings.LastIndex(message.To, ".")
 			var id, _ = strconv.ParseInt(message.To[i+1:], 10, 64)
 			var ch = https[id]
@@ -96,7 +102,7 @@ func main() {
 		kk.GetDispatchMain().Async(func() {
 			if cli != nil {
 				https[id] = ch
-				var m = kk.Message{"MESSAGE", fmt.Sprintf("%s.%d", cli.Name(), id), to, contentType, body}
+				var m = kk.Message{"MESSAGE", fmt.Sprintf("%s%d", cli.Name(), id), to, contentType, body}
 				cli.Send(&m, nil)
 			} else {
 				var m = kk.Message{"TIMEOUT", "", "", "", []byte("")}
@@ -128,7 +134,11 @@ func main() {
 				w.WriteHeader(http.StatusServiceUnavailable)
 			} else {
 				w.Header().Add("From", m.From)
-				w.Header().Add("Content-Type", m.Type)
+				if strings.HasPrefix(m.Type, "text") {
+					w.Header().Add("Content-Type", m.Type+"; charset=utf-8")
+				} else {
+					w.Header().Add("Content-Type", m.Type)
+				}
 				w.Header().Add("Content-Length", strconv.Itoa(len(m.Content)))
 				w.WriteHeader(http.StatusOK)
 				w.Write(m.Content)
