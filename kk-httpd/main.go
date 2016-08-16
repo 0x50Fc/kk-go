@@ -61,7 +61,7 @@ func main() {
 			var ch = https[id]
 
 			if ch != nil {
-				if message.Method == "MESSAGE" {
+				if message.Method == "REQUEST" {
 					ch <- *message
 					delete(https, id)
 				} else {
@@ -102,7 +102,7 @@ func main() {
 		kk.GetDispatchMain().Async(func() {
 			if cli != nil {
 				https[id] = ch
-				var m = kk.Message{"MESSAGE", fmt.Sprintf("%s%d", cli.Name(), id), to, contentType, body}
+				var m = kk.Message{"REQUEST", fmt.Sprintf("%s%d", cli.Name(), id), to, contentType, body}
 				cli.Send(&m, nil)
 			} else {
 				var m = kk.Message{"TIMEOUT", "", "", "", []byte("")}
@@ -132,7 +132,7 @@ func main() {
 				w.WriteHeader(http.StatusGatewayTimeout)
 			} else if m.Method == "UNAVAILABLE" {
 				w.WriteHeader(http.StatusServiceUnavailable)
-			} else {
+			} else if m.Method == "REQUEST" {
 				w.Header().Add("From", m.From)
 				if strings.HasPrefix(m.Type, "text") {
 					w.Header().Add("Content-Type", m.Type+"; charset=utf-8")
@@ -142,6 +142,8 @@ func main() {
 				w.Header().Add("Content-Length", strconv.Itoa(len(m.Content)))
 				w.WriteHeader(http.StatusOK)
 				w.Write(m.Content)
+			} else {
+				w.WriteHeader(http.StatusUnsupportedMediaType)
 			}
 		}
 	}
