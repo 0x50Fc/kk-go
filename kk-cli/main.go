@@ -3,9 +3,7 @@ package main
 import (
 	"fmt"
 	"github.com/hailongz/kk-go/kk"
-	"log"
 	"os"
-	"time"
 )
 
 func help() {
@@ -26,28 +24,12 @@ func main() {
 		return
 	}
 
-	var cli *kk.TCPClient = nil
-	var cli_connect func() = nil
-
-	cli_connect = func() {
-		log.Println("connect " + address + " ...")
-		cli = kk.NewTCPClient(name, address, nil)
-		cli.OnConnected = func() {
-			log.Println(cli.Address())
+	var replay, getname = kk.TCPClientConnect(name, address, nil, func(message *kk.Message) {
+		fmt.Println(message)
+		if message.Type == "text" {
+			fmt.Println(string(message.Content))
 		}
-		cli.OnDisconnected = func(err error) {
-			log.Println("disconnected: " + cli.Address() + " error:" + err.Error())
-			kk.GetDispatchMain().AsyncDelay(cli_connect, time.Second)
-		}
-		cli.OnMessage = func(message *kk.Message) {
-			fmt.Println(message)
-			if message.Type == "text" {
-				fmt.Println(string(message.Content))
-			}
-		}
-	}
-
-	cli_connect()
+	})
 
 	go func() {
 
@@ -62,8 +44,8 @@ func main() {
 			func(to string, content string) {
 
 				kk.GetDispatchMain().Async(func() {
-					var m = kk.Message{method, cli.Name(), to, "text", []byte(content)}
-					cli.Send(&m, nil)
+					var m = kk.Message{method, getname(), to, "text", []byte(content)}
+					replay(&m)
 				})
 
 			}(to, content)

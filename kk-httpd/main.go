@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/hailongz/kk-go/kk"
 	"io"
@@ -18,6 +19,8 @@ func help() {
 
 func main() {
 
+	log.SetFlags(log.Llongfile | log.LstdFlags)
+
 	var args = os.Args
 	var name string = ""
 	var address string = ""
@@ -34,47 +37,28 @@ func main() {
 		return
 	}
 
-	var https = make(map[int64]chan kk.Message)
-	var cli *kk.TCPClient = nil
-	var cli_connect func() = nil
+	var https = map[int64]chan kk.Message{}
 
-	cli_connect = func() {
-		log.Println("connect " + address + " ...")
-		cli = kk.NewTCPClient(name, address, map[string]interface{}{"exclusive": true})
-		cli.OnConnected = func() {
-			log.Println(cli.Address())
-		}
-		cli.OnDisconnected = func(err error) {
-			log.Println("disconnected: " + cli.Address() + " error:" + err.Error())
-			kk.GetDispatchMain().AsyncDelay(cli_connect, time.Second)
-		}
-		cli.OnMessage = func(message *kk.Message) {
+	var reply, getname = kk.TCPClientConnect(name, address, map[string]interface{}{"exclusive": true}, func(message *kk.Message) {
 
-			log.Println(message)
+		log.Println(message.String())
 
-			if strings.HasPrefix(message.Type, "text") {
-				log.Println(string(message.Content))
+		var i = strings.LastIndex(message.To, ".")
+		var id, _ = strconv.ParseInt(message.To[i+1:], 10, 64)
+		var ch, ok = https[id]
+
+		if ok && ch != nil {
+			if message.Method == "REQUEST" {
+				ch <- *message
+				delete(https, id)
+			} else {
+				var m = kk.Message{"UNAVAILABLE", "", "", "", []byte("")}
+				ch <- m
+				delete(https, id)
 			}
-
-			var i = strings.LastIndex(message.To, ".")
-			var id, _ = strconv.ParseInt(message.To[i+1:], 10, 64)
-			var ch = https[id]
-
-			if ch != nil {
-				if message.Method == "REQUEST" {
-					ch <- *message
-					delete(https, id)
-				} else {
-					var m = kk.Message{"UNAVAILABLE", "", "", "", []byte("")}
-					ch <- m
-					delete(https, id)
-				}
-			}
-
 		}
-	}
 
-	cli_connect()
+	})
 
 	var http_handler = func(w http.ResponseWriter, r *http.Request) {
 
@@ -99,16 +83,61 @@ func main() {
 			return
 		}
 
+		var trackId = ""
+
+		{
+			var ip = r.Header.Get("X-CLIENT-IP")
+
+			if ip == "" {
+				ip = r.Header.Get("X-Real-IP")
+			}
+
+			if ip == "" {
+				ip = r.RemoteAddr
+			}
+
+			var cookie, err = r.Cookie("kk")
+
+			if err != nil {
+				var v = http.Cookie{}
+				v.Name = "kk"
+				v.Value = strconv.FormatInt(kk.UUID(), 10)
+				v.Expires = time.Now().Add(24 * 3600 * time.Second)
+				v.HttpOnly = true
+				v.MaxAge = 24 * 3600
+				http.SetCookie(w, &v)
+				cookie = &v
+			}
+
+			trackId = cookie.Value
+
+			var b, _ = json.Marshal(map[string]string{"code": trackId, "ip": ip,
+				"User-Agent": r.Header.Get("User-Agent"),
+				"Referer":    r.Header.Get("Referer"),
+				"Path":       r.RequestURI,
+				"Host":       r.Host,
+				"Protocol":   r.Proto})
+
+			var m = kk.Message{"MESSAGE", getname(), "kk.message.http.request", "text/json", b}
+
+			kk.GetDispatchMain().Async(func() {
+				reply(&m)
+			})
+
+		}
+
 		kk.GetDispatchMain().Async(func() {
-			if cli != nil {
-				https[id] = ch
-				var m = kk.Message{"REQUEST", fmt.Sprintf("%s%d", cli.Name(), id), to, contentType, body}
-				cli.Send(&m, nil)
-			} else {
-				var m = kk.Message{"TIMEOUT", "", "", "", []byte("")}
-				ch <- m
+
+			https[id] = ch
+
+			var m = kk.Message{"REQUEST", fmt.Sprintf("%s%s.%d", getname(), trackId, id), to, contentType, body}
+
+			if !reply(&m) {
+				var r = kk.Message{"TIMEOUT", "", "", "", []byte("")}
+				ch <- r
 				delete(https, id)
 			}
+
 		})
 
 		kk.GetDispatchMain().AsyncDelay(func() {
@@ -116,8 +145,8 @@ func main() {
 			var ch = https[id]
 
 			if ch != nil {
-				var m = kk.Message{"TIMEOUT", "", "", "", []byte("")}
-				ch <- m
+				var r = kk.Message{"TIMEOUT", "", "", "", []byte("")}
+				ch <- r
 				delete(https, id)
 			}
 

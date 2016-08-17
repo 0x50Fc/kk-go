@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"strings"
+	"time"
 )
 
 type TCPClient struct {
@@ -306,4 +307,47 @@ func NewTCPClientConnection(conn net.Conn, id string) *TCPClient {
 	}()
 
 	return &v
+}
+
+func TCPClientConnect(name string, address string, options map[string]interface{}, onmessage func(message *Message)) (func(message *Message) bool, func() string) {
+
+	var cli *TCPClient = nil
+	var cli_connect func() = nil
+
+	cli_connect = func() {
+
+		log.Printf("Connect(%s) %s ...\n", name, address)
+
+		cli = NewTCPClient(name, address, options)
+
+		cli.OnConnected = func() {
+			log.Printf("Connected(%s) %s \n", name, cli.Address())
+		}
+
+		cli.OnDisconnected = func(err error) {
+			log.Printf("Disconnected(%s) %s %s\n", name, cli.Address(), err.Error())
+			GetDispatchMain().AsyncDelay(cli_connect, time.Second)
+		}
+
+		cli.OnMessage = func(message *Message) {
+			onmessage(message)
+		}
+
+	}
+
+	cli_connect()
+
+	return func(message *Message) bool {
+			if cli != nil {
+				cli.Send(message, nil)
+				return true
+			}
+			return false
+		}, func() string {
+			if cli != nil {
+				return cli.Name()
+			}
+			return name
+		}
+
 }

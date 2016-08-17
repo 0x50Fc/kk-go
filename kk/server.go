@@ -10,9 +10,8 @@ import (
 
 type TCPServer struct {
 	Neuron
-	chan_break chan bool
-	clients    *list.List
-
+	chan_break     chan bool
+	clients        *list.List
 	OnMessage      func(message *Message, from INeuron)
 	OnStart        func()
 	OnFail         func(err error)
@@ -50,7 +49,7 @@ func (c *TCPServer) Send(message *Message, from INeuron) {
 		if (from == nil || (from != f)) && f.name != "" && strings.HasPrefix(message.To, f.name) {
 			f.Send(message, from)
 			count += 1
-			if f.Get("exclusive").(bool) {
+			if f.GetBoolean("exclusive") {
 				break
 			}
 		}
@@ -58,7 +57,7 @@ func (c *TCPServer) Send(message *Message, from INeuron) {
 	}
 
 	if count == 0 && from != nil && c.name != message.To {
-		var m = Message{"DONE", c.name, from.Name(), message.Method, []byte("")}
+		var m = Message{"DONE", c.name, message.From, "text", []byte(message.Method)}
 		from.Send(&m, nil)
 	}
 

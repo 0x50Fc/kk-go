@@ -2,7 +2,9 @@ package kk
 
 import (
 	"bytes"
+	"fmt"
 	"strconv"
+	"strings"
 )
 
 type Message struct {
@@ -11,6 +13,13 @@ type Message struct {
 	To      string
 	Type    string
 	Content []byte
+}
+
+func (M *Message) String() string {
+	if strings.HasPrefix(M.Type, "text") {
+		return fmt.Sprintf("Method: %s From: %s To: %s Type: %s Content: %s", M.Method, M.From, M.To, M.Type, string(M.Content))
+	}
+	return fmt.Sprintf("Method: %s From: %s To: %s Type: %s Content: <%d>", M.Method, M.From, M.To, M.Type, len(M.Content))
 }
 
 type IReader interface {
@@ -32,8 +41,8 @@ type MessageReader struct {
 	_length  int
 	_content *bytes.Buffer
 	_message Message
-	_unread  []byte
-	_data    []byte
+	_data    *bytes.Buffer
+	_buf     []byte
 }
 
 func NewMessageReader() *MessageReader {
@@ -43,17 +52,21 @@ func NewMessageReader() *MessageReader {
 	v._value = bytes.NewBuffer(nil)
 	v._length = 0
 	v._content = bytes.NewBuffer(nil)
-	v._unread = nil
-	v._data = make([]byte, 2048)
+	v._data = bytes.NewBuffer(nil)
+	v._buf = make([]byte, 20480)
 	return &v
 }
 
-func (rd *MessageReader) readBytes(data []byte, n int) (*Message, int) {
+func (rd *MessageReader) readBytes() (*Message, error) {
 
-	var i = 0
+	for rd._data.Len() > 0 {
 
-	for i < n {
-		var c = data[i]
+		var c, err = rd._data.ReadByte()
+
+		if err != nil {
+			return nil, err
+		}
+
 		switch rd._state {
 		case MessageReaderStateKey:
 			{
@@ -64,7 +77,7 @@ func (rd *MessageReader) readBytes(data []byte, n int) (*Message, int) {
 					if rd._length == 0 {
 						rd._state = MessageReaderStateKey
 						rd._message.Content = nil
-						return &rd._message, i + 1
+						return &rd._message, nil
 					} else {
 						rd._state = MessageReaderStateContent
 						rd._content.Reset()
@@ -105,44 +118,37 @@ func (rd *MessageReader) readBytes(data []byte, n int) (*Message, int) {
 					rd._message.Content = rd._content.Bytes()
 					rd._length = 0
 					rd._content.Reset()
-					return &rd._message, i + 1
+					return &rd._message, nil
 				}
 			}
 		}
-		i++
 	}
 
-	return nil, i
+	return nil, nil
 }
 
 func (rd *MessageReader) Read(reader IReader) (*Message, error) {
 
-	if rd._unread != nil {
-		var n = len(rd._unread)
-		var v, i = rd.readBytes(rd._unread, n)
-		if i == n {
-			rd._unread = nil
-		} else {
-			rd._unread = rd._unread[i:]
-		}
-		if v != nil {
-			return v, nil
-		}
+	var v, err = rd.readBytes()
+
+	if err != nil {
+		return nil, err
 	}
 
-	var n, err = reader.Read(rd._data)
+	if v == nil {
 
-	if n > 0 {
-		var v, i = rd.readBytes(rd._data, n)
-		if i < n {
-			rd._unread = rd._data[i:]
+		var n, err = reader.Read(rd._buf)
+
+		if err != nil {
+			return nil, err
 		}
-		if v != nil {
-			return v, err
-		}
+
+		rd._data.Write(rd._buf[0:n])
+
+		return rd.readBytes()
 	}
 
-	return nil, err
+	return v, err
 }
 
 type MessageWriter struct {
@@ -158,8 +164,7 @@ func NewMessageWriter() *MessageWriter {
 func (wd *MessageWriter) Done(writer IWriter) (bool, error) {
 
 	if wd._data.Len() != 0 {
-		var n, err = writer.Write(wd._data.Bytes())
-		wd._data.Truncate(wd._data.Len() - n)
+		var _, err = wd._data.WriteTo(writer)
 		return false, err
 	}
 
